@@ -13,7 +13,7 @@ object Task4Optional1 extends App {
   val sc = spark.sparkContext
 
   // Step 2: Load the log data into an RDD
-  val logFilePath = "/Users/aniketsharma/Documents/access_log.txt" // Replace with the actual path
+  val logFilePath = "/Users/aniketsharma/Documents/access_log.txt"
   val logData = sc.textFile(logFilePath)
 
   // Step 3: Parse the log data
@@ -65,6 +65,6 @@ object Task4Optional1 extends App {
   println("URL with the most number of 404 responses:")
   most404ResponsesUrl.foreach { case (url, count) => println(s"$url: $count")}
 
-    // Stop the Spark session
+
     spark.stop()
 }
