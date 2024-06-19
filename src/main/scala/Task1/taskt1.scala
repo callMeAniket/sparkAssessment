@@ -11,12 +11,12 @@ object taskt1 {
   private val awsS3Endpoint = config.getString("aws.s3.endpoint")
 
   def main(args: Array[String]): Unit = {
-    val tableName = "air_quality_data_new"
+    val tableName = "air_quality_data_final"
     val keySpaceName = "my_keyspace"
     val df = readFromS3(getSpark("readS3"), "s3a://mytestbucket-payoda/zaragoza_data.csv")
     writeToKeySpace(df, tableName, keySpaceName)
-    readFromKeySpace(getSpark("KeyspaceToParquet"), tableName, keySpaceName)
-    writeToS3(df, "s3a://mytestbucket-payoda/air-quality-parquet/")
+    val readFromKeySpaceDf = readFromKeySpace(getSpark("KeyspaceToParquet"), tableName, keySpaceName)
+    writeToS3(readFromKeySpaceDf, "s3a://mytestbucket-payoda/air-quality-parquet/")
     aggregationOnParquet(getSpark("aggregation"), "s3a://mytestbucket-payoda/air-quality-parquet/")
   }
 
@@ -24,13 +24,13 @@ object taskt1 {
     SparkSession.builder
       .appName(name)
       .config("spark.hadoop.fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider")
-      .config("spark.master", "local")
+      .config("spark.master", "local[10]")
       .config("spark.cassandra.connection.host", "cassandra.ap-south-1.amazonaws.com")
       .config("spark.cassandra.connection.port", "9142")
       .config("spark.cassandra.connection.ssl.enabled", "true")
       .config("spark.cassandra.auth.username", "aniketProgram-at-533267282416")
       .config("spark.cassandra.auth.password", "dqXefs1niwS9cT4HWSSWyjwpQKiDifh74zTbwYlPPWmvJyUKe4paAlvOHDE=")
-      .config("spark.cassandra.input.consistency.level", "LOCAL_QUORUM")
+      .config("spark.cassandra.output.consistency.level", "LOCAL_QUORUM")
       .config("spark.cassandra.connection.ssl.trustStore.path", "/Users/aniketsharma/cassandra_truststore.jks")
       .config("spark.cassandra.connection.ssl.trustStore.password", "pbdmbm6*")
       .getOrCreate()
@@ -45,7 +45,9 @@ object taskt1 {
     hadoopConfig.set("fs.s3a.secret.key", awsSecretAccessKey)
     hadoopConfig.set("fs.s3a.endpoint", awsS3Endpoint)
     hadoopConfig.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-    val df = spark.read.option("header", "true").csv(csvFilePath)
+    val df = spark.read.option("header", "true")
+      .option("inferSchema", "true")
+      .csv(csvFilePath)
     println("Aniket :: read from S3 " + df.show())
     df
   }
@@ -75,20 +77,18 @@ object taskt1 {
     df.write.parquet(parquetOutputPath)
   }
 
-  private def aggregationOnParquet(spark: SparkSession, parquetInputPath: String) = {
+  private def aggregationOnParquet(spark: SparkSession, parquetInputPath: String): Unit = {
     println("Aniket :: reached here")
     val parquetDF = spark.read.parquet(parquetInputPath)
 
-    // Example 1: Average pollutant value by city
-    val avgPollutantByCity = parquetDF.groupBy("city").agg(avg("value").alias("average_pollutant"))
-    avgPollutantByCity.show()
+    val avgNO2ByStation = parquetDF.groupBy("station_name").agg(avg("NO2").alias("average_NO2"))
+    avgNO2ByStation.show()
 
-    // Example 2: Maximum pollutant value by country
-    val maxPollutantByCountry = parquetDF.groupBy("country").agg(functions.max("value").alias("max_pollutant"))
-    maxPollutantByCountry.show()
+    val maxO3ByDate = parquetDF.groupBy("Date").agg(functions.max("O3").alias("max_O3"))
+    maxO3ByDate.show()
 
-    // Example 3: Count of records per pollutant
-    val countByPollutant = parquetDF.groupBy("pollutant").count()
-    countByPollutant.show()
+    val countByStation = parquetDF.groupBy("station_name").count()
+    countByStation.show()
   }
+
 }
